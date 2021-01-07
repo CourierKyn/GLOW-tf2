@@ -4,8 +4,8 @@ import os
 
 
 class Brain:
-    def __init__(self, factor_size, k, l, img_size, channel_size, learning_rate=LEARNING_RATE):
-        self.model = GLOW(factor_size, k, l, img_size, channel_size)
+    def __init__(self, factor_size, k, l, img_size, channel_size, learning_rate=LEARNING_RATE, **kwargs):
+        self.model = GLOW(factor_size, k, l, img_size, channel_size, **kwargs)
 
         # # lr scheduler
         # lr_scheduler = tf.keras.optimizers.schedules.ExponentialDecay(

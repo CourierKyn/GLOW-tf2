@@ -195,28 +195,30 @@ class ActNormalization(tf.keras.layers.Layer):
 
 
 class AffineCouplingLayer(tf.keras.layers.Layer):
-    def __init__(self):
+    def __init__(self, mid_channels=512, one_by_one=False):
         super().__init__()
+        self.mid_channels = mid_channels
+        self.one_by_one = one_by_one
 
     def build(self, input_shape):
         channel_size = input_shape[-1]
         self.channel_size = channel_size
 
-        self.nn = self.nnLayer(channel_size)
+        self.nn = self.nnLayer(channel_size, self.mid_channels, self.one_by_one)
 
 
-    def nnLayer(self, channel_size):
+    def nnLayer(self, channel_size, mid_channels, one_by_one):
         inputs = tf.keras.Input(shape=(None, None, channel_size // 2))
 
-        x = tf.keras.layers.Conv2D(512, 4, activation=ACTIVATION, kernel_initializer=KERNEL_INITIALIZER, padding="same")(inputs)
+        x = tf.keras.layers.Conv2D(mid_channels, 1 if one_by_one else 4, activation=ACTIVATION, kernel_initializer=KERNEL_INITIALIZER, padding="same")(inputs)
         x = ActNormalization(output_only_one=True)(x)
         x = tf.keras.layers.Dropout(DROPOUT_N)(x)
-        x = tf.keras.layers.Conv2D(512, 1, activation=ACTIVATION, kernel_initializer=KERNEL_INITIALIZER, padding="same")(x)
+        x = tf.keras.layers.Conv2D(mid_channels, 1, activation=ACTIVATION, kernel_initializer=KERNEL_INITIALIZER, padding="same")(x)
         x = ActNormalization(output_only_one=True)(x)
         x = tf.keras.layers.Dropout(DROPOUT_N)(x)
 
-        s = tf.keras.layers.Conv2D(channel_size // 2, 4, kernel_initializer=KERNEL_INITIALIZER_CLOSE_VALUE(2.), padding="same")(x)
-        t = tf.keras.layers.Conv2D(channel_size // 2, 4, kernel_initializer=KERNEL_INITIALIZER_CLOSE_VALUE(0.), padding="same")(x)
+        s = tf.keras.layers.Conv2D(channel_size // 2, 1 if one_by_one else 4, kernel_initializer=KERNEL_INITIALIZER_CLOSE_VALUE(2.), padding="same")(x)
+        t = tf.keras.layers.Conv2D(channel_size // 2, 1 if one_by_one else 4, kernel_initializer=KERNEL_INITIALIZER_CLOSE_VALUE(0.), padding="same")(x)
 
         # postprocess s & t
         s = tf.nn.sigmoid(s)
@@ -254,11 +256,11 @@ class AffineCouplingLayer(tf.keras.layers.Layer):
 
 
 class FlowStep(tf.keras.layers.Layer):
-    def __init__(self):
+    def __init__(self, **kwargs):
         super().__init__()
         self.an = ActNormalization()
         self.perm = InvConv1()
-        self.acl = AffineCouplingLayer()
+        self.acl = AffineCouplingLayer(**kwargs)
 
     def call(self, inputs, logdet=False, reverse=False, training=False):
         if not reverse:
@@ -330,7 +332,7 @@ class SqueezeLayer(tf.keras.layers.Layer):
 
 
 class GLOW(tf.keras.Model):
-    def __init__(self, factor_size, K, L, img_size, channel_size):
+    def __init__(self, factor_size, K, L, img_size, channel_size, **kwargs):
         super().__init__()
 
         # variables
@@ -340,7 +342,7 @@ class GLOW(tf.keras.Model):
         # layers
         # self.cropifnotfitlayer = CropIfNotFitLayer(sqrt_factor_size)
         self.squeezelayers = [SqueezeLayer(sqrt_factor_size) for _ in range(L)]
-        self.flowsteps = [[FlowStep() for _ in range(K)] for _ in range(L)]
+        self.flowsteps = [[FlowStep(**kwargs) for _ in range(K)] for _ in range(L)]
         self.logpzlayers = [Z_Norm_IntermediateLayer() for _ in range(L-1)]
         self.logpzlayers_last = Z_Norm_LastLayer()
 
